@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>สแกนคะแนน</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+  :root { --ink:#23324A; --muted:#5D6577; --line:#DCE0E8; --bg:#F6F7FA; --accent:#1F6FEB; --bad:#C0392B; --ok:#1E8449; --warn:#B9770E; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:17px/1.5 -apple-system,"Sarabun","Noto Sans Thai",Tahoma,sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:720px; margin:0 auto; padding:12px 14px 40px; }
+  h1 { font-size:20px; margin:0 0 8px; }
+  label { font-size:14px; color:var(--muted); display:block; margin-top:8px; }
+  select, input { width:100%; font:inherit; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); }
+  button { font:inherit; padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .row { display:flex; gap:8px; align-items:flex-end; } .row > * { flex:1; }
+  .hint { font-size:14px; color:var(--muted); margin:6px 0; }
+  .box { background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px; margin-top:12px; }
+  .camwrap { position:relative; background:#111; border-radius:14px; overflow:hidden; aspect-ratio:4/3; margin-top:12px; }
+  video { width:100%; height:100%; object-fit:cover; display:block; }
+  .frame { position:absolute; inset:18% 22%; border:3px solid rgba(255,255,255,.85); border-radius:16px; box-shadow:0 0 0 999px rgba(0,0,0,.25); }
+  .camoff { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; text-align:center; padding:20px; }
+  #card { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:2px solid var(--accent); padding:14px 14px calc(14px + env(safe-area-inset-bottom)); box-shadow:0 -8px 30px rgba(0,0,0,.15); }
+  #card .nm { font-size:24px; font-weight:700; }
+  .pad { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:10px; }
+  .pad button { padding:14px 0; font-size:20px; font-weight:600; }
+  .pad button.max { background:#E8F5E9; border-color:var(--ok); }
+  .pad button.zero { background:#FDECEA; border-color:var(--bad); }
+  .toast { position:fixed; left:50%; top:14px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 16px; border-radius:12px; font-size:16px; z-index:9; text-align:center; max-width:90%; }
+  .toast.ok { background:var(--ok); } .toast.bad { background:var(--bad); } .toast.warn { background:var(--warn); }
+  #log div { display:flex; justify-content:space-between; border-bottom:1px dashed var(--line); padding:4px 0; font-size:15px; }
+  .prog { font-size:15px; margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>สแกนคะแนน (กล้องสด)</h1>
+
+  <section id="setup" hidden>
+    <div class="box">
+      <p>ใส่รหัสลับจากชีต <b>ตั้งค่าสแกนสด</b> ในสมุดคะแนน ใส่ครั้งเดียว เครื่องนี้จะจำไว้</p>
+      <input type="password" id="keyIn" autocomplete="off" placeholder="รหัสลับ 20 ตัว">
+      <button type="button" id="keySave" class="primary" style="margin-top:8px;width:100%">เริ่มใช้งาน</button>
+      <p class="hint">ใช้เฉพาะ iPad หรือมือถือของครูเท่านั้น</p>
+    </div>
+  </section>
+
+  <section id="app" hidden>
+    <label for="room">วิชาและห้อง</label><select id="room"></select>
+    <label for="item">ช่องคะแนน</label><select id="item"></select>
+    <div class="row">
+      <div><label for="mode">สแกนแล้ว</label>
+        <select id="mode"><option value="ask">แตะเลือกคะแนนเอง</option><option value="max">ให้คะแนนเต็มทันที</option><option value="fixed">ให้คะแนนเท่ากันทุกคน</option></select></div>
+      <div id="fixedBox" hidden><label for="fixedVal">คะแนนที่ให้</label><input type="number" id="fixedVal" inputmode="numeric" min="0"></div>
+    </div>
+    <div class="camwrap"><video id="video" playsinline muted></video><div class="frame" id="frame" hidden></div><div class="camoff" id="camoff">กด "เปิดกล้อง" แล้วส่อง QR ของนักเรียน</div></div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" id="camBtn" class="primary">เปิดกล้อง</button>
+      <input type="text" id="noIn" inputmode="numeric" placeholder="หรือพิมพ์เลขที่ แล้ว Enter">
+    </div>
+    <div class="prog" id="prog"></div>
+    <div class="box"><b>บันทึกล่าสุด</b><div id="log" class="hint">ยังไม่มี</div></div>
+    <p class="hint" style="margin-top:16px"><a href="#" id="forget">ลืมรหัสในเครื่องนี้</a></p>
+  </section>
+</main>
+
+<div id="card" hidden>
+  <div class="row" style="align-items:center"><div><div class="hint" id="cNo"></div><div class="nm" id="cName"></div><div class="hint" id="cOld"></div></div>
+    <button type="button" id="cSkip" style="flex:0 0 auto">ข้าม</button></div>
+  <div class="pad" id="pad"></div>
+</div>
+
+<script>
+(function () {
+  var API = 'https://script.google.com/macros/s/AKfycbz_Pg8PJXClt2xFGX4S6rI4Im6Qg604agZ3TUi6NwbzBdRc5ovV1nygOFUWK1ZnDQs/exec';
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = null, DATA = [], cur = null, item = null, students = [], byHash = {}, current = null;
+  var stream = null, timer = null, detector = null, busy = false, lastCode = '', lastAt = 0;
+  var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function lsGet(k) { try { return localStorage.getItem('live_' + k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem('live_' + k); else localStorage.setItem('live_' + k, v); } catch (e) {} }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  var tt = null;
+  function toast(html, cls, ms) {
+    var d = document.querySelector('.toast'); if (!d) { d = document.createElement('div'); document.body.appendChild(d); }
+    d.className = 'toast ' + (cls || ''); d.innerHTML = html; d.hidden = false;
+    clearTimeout(tt); tt = setTimeout(function () { d.hidden = true; }, ms || 1600);
+  }
+  function buzz(ok) { try { navigator.vibrate && navigator.vibrate(ok ? 60 : [60, 60, 60]); } catch (e) {} }
+
+  function call(body) {
+    body.key = KEY;
+    return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error); return j.data; });
+  }
+  function hash(s) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(KEY + '|' + s)).then(function (b) {
+      return Array.prototype.map.call(new Uint8Array(b).slice(0, 8), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+    });
+  }
+
+  // ---------- เริ่มต้น ----------
+  function start() {
+    KEY = lsGet('key');
+    if (!KEY) { $('setup').hidden = false; $('app').hidden = true; return; }
+    $('setup').hidden = true; $('app').hidden = false;
+    toast('กำลังโหลด…', '', 8000);
+    call({ action: 'init' }).then(function (d) {
+      DATA = d;
+      $('room').innerHTML = d.map(function (s, i) { return '<option value="' + i + '">' + esc(s.title) + '</option>'; }).join('');
+      var r = lsGet('room'); if (r && d[r]) $('room').value = r;
+      pickRoom(); toast('พร้อมสแกน', 'ok', 900);
+    }).catch(function (e) {
+      toast(esc(e.message), 'bad', 4000);
+      if (/รหัส/.test(e.message)) { lsSet('key', null); KEY = null; setTimeout(start, 1500); }
+    });
+  }
+  $('keySave').addEventListener('click', function () {
+    var k = $('keyIn').value.trim(); if (k.length < 16) { toast('รหัสสั้นเกินไป', 'bad'); return; }
+    lsSet('key', k); $('keyIn').value = ''; start();
+  });
+  $('forget').addEventListener('click', function (e) { e.preventDefault(); if (confirm('ลบรหัสออกจากเครื่องนี้?')) { lsSet('key', null); stopCam(); start(); } });
+
+  function pickRoom() {
+    cur = DATA[$('room').value]; lsSet('room', $('room').value);
+    $('item').innerHTML = cur.items.map(function (it, i) {
+      return '<option value="' + i + '">' + esc(it.label) + ' — เต็ม ' + it.max + (it.type === 'pre' ? ' (ไม่นับ)' : it.type === 'extra' ? ' (เก็บเพิ่ม)' : '') + '</option>';
+    }).join('');
+    var ii = lsGet('item_' + cur.sheet); if (ii && cur.items[ii]) $('item').value = ii;
+    pickItem();
+  }
+  function pickItem() {
+    item = cur.items[$('item').value]; lsSet('item_' + cur.sheet, $('item').value);
+    $('fixedVal').max = item.max;
+    students = []; byHash = {}; renderProg();
+    call({ action: 'students', sheet: cur.sheet, col: item.col }).then(function (list) {
+      students = list; byHash = {};
+      list.forEach(function (s) { if (s.h) byHash[s.h] = s; });
+      renderProg();
+    }).catch(function (e) { toast(esc(e.message), 'bad', 3000); });
+  }
+  $('room').addEventListener('change', pickRoom);
+  $('item').addEventListener('change', pickItem);
+  $('mode').addEventListener('change', function () { $('fixedBox').hidden = $('mode').value !== 'fixed'; lsSet('mode', $('mode').value); });
+  if (lsGet('mode')) { $('mode').value = lsGet('mode'); $('fixedBox').hidden = $('mode').value !== 'fixed'; }
+
+  function renderProg() {
+    if (!item) return;
+    var done = students.filter(function (s) { return s.score !== '' && s.score !== null; }).length;
+    $('prog').textContent = students.length ? (cur.title + ' · ' + item.label + ' · มีคะแนนแล้ว ' + done + '/' + students.length + ' คน') : 'กำลังโหลดรายชื่อ…';
+  }
+
+  // ---------- กล้อง ----------
+  function startCam() {
+    $('camoff').textContent = 'กำลังเปิดกล้อง…';
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then(function (s) {
+        stream = s; var v = $('video'); v.srcObject = s; v.play();
+        $('camoff').hidden = true; $('frame').hidden = false; $('camBtn').textContent = 'ปิดกล้อง';
+        try { if ('BarcodeDetector' in window) detector = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { detector = null; }
+        timer = setInterval(tick, 180);
+      })
+      .catch(function (e) { $('camoff').hidden = false; $('camoff').textContent = 'เปิดกล้องไม่ได้ (' + (e && e.name ? e.name : e) + ') ตรวจว่าอนุญาตให้ Safari ใช้กล้องแล้ว'; });
+  }
+  function stopCam() {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    $('video').srcObject = null; $('frame').hidden = true; $('camoff').hidden = false;
+    $('camoff').textContent = 'กด "เปิดกล้อง" แล้วส่อง QR ของนักเรียน'; $('camBtn').textContent = 'เปิดกล้อง';
+  }
+  $('camBtn').addEventListener('click', function () { if (stream) stopCam(); else startCam(); });
+  function tick() {
+    var v = $('video'); if (busy || current || !v.videoWidth) return;
+    if (detector) {
+      busy = true;
+      detector.detect(v).then(function (r) { busy = false; if (r && r.length) onCode(r[0].rawValue); }).catch(function () { busy = false; detector = null; });
+      return;
+    }
+    if (typeof jsQR !== 'function') return;
+    var w = Math.min(640, v.videoWidth), h = Math.round(v.videoHeight * w / v.videoWidth);
+    canvas.width = w; canvas.height = h; ctx.drawImage(v, 0, 0, w, h);
+    var q = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+    if (q && q.data) onCode(q.data);
+  }
+
+  // ---------- เจอ QR ----------
+  function onCode(code) {
+    var now = Date.now(); code = String(code).trim();
+    if (code === lastCode && now - lastAt < 2500) return;
+    lastCode = code; lastAt = now; busy = true;
+    var cands = [code].concat(code.match(/\d{4,}/g) || []);
+    Promise.all(cands.map(hash)).then(function (hs) {
+      busy = false;
+      var s = null; for (var i = 0; i < hs.length && !s; i++) s = byHash[hs[i]] || null;
+      if (!s) { buzz(false); toast('ไม่พบในห้องนี้ ตรวจว่าเลือกห้องถูก', 'bad'); return; }
+      act(s);
+    });
+  }
+  function act(s) {
+    var m = $('mode').value;
+    if (m === 'max') { save(s, item.max); return; }
+    if (m === 'fixed') {
+      var fv = Number($('fixedVal').value);
+      if ($('fixedVal').value === '' || isNaN(fv) || fv < 0 || fv > item.max) { toast('ใส่คะแนนที่จะให้ (0–' + item.max + ') ก่อน', 'bad'); return; }
+      save(s, fv); return;
+    }
+    show(s);
+  }
+  $('noIn').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return; e.preventDefault();
+    var t = $('noIn').value.trim(); $('noIn').value = '';
+    var s = students.filter(function (x) { return String(x.no) === t; })[0];
+    if (s) act(s); else toast('ไม่มีเลขที่ ' + esc(t), 'bad');
+  });
+  function show(s) {
+    current = s; buzz(true);
+    $('cNo').textContent = 'เลขที่ ' + s.no;
+    $('cName').textContent = s.nick;
+    var has = s.score !== '' && s.score !== null;
+    $('cOld').textContent = item.label + ' · เต็ม ' + item.max + (has ? ' · ตอนนี้ได้ ' + s.score : '');
+    var pad = '';
+    if (item.max <= 30) for (var v = 0; v <= item.max; v++) pad += '<button type="button" data-v="' + v + '" class="' + (v === item.max ? 'max' : v === 0 ? 'zero' : '') + '">' + v + '</button>';
+    else pad = '<button type="button" data-v="' + item.max + '" class="max" style="grid-column:span 3">เต็ม ' + item.max + '</button><button type="button" data-v="0" class="zero" style="grid-column:span 3">0</button>';
+    $('pad').innerHTML = pad; $('card').hidden = false;
+  }
+  $('pad').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && current) save(current, Number(b.dataset.v)); });
+  $('cSkip').addEventListener('click', function () { current = null; $('card').hidden = true; });
+
+  function save(s, v) {
+    current = null; $('card').hidden = true;
+    var old = s.score; s.score = v; renderProg();
+    var row = document.createElement('div');
+    row.innerHTML = '<span>เลขที่ ' + s.no + ' ' + esc(s.nick) + ' · ' + v + '</span><span class="st">กำลังบันทึก…</span>';
+    if ($('log').classList.contains('hint')) { $('log').classList.remove('hint'); $('log').innerHTML = ''; }
+    $('log').insertBefore(row, $('log').firstChild);
+    toast('เลขที่ ' + s.no + ' ' + esc(s.nick) + '<br>' + v + ' คะแนน', 'ok', 1000);
+    call({ action: 'save', sheet: cur.sheet, col: item.col, row: s.row, value: v }).then(function () {
+      row.querySelector('.st').textContent = 'บันทึกแล้ว'; row.querySelector('.st').style.color = 'var(--ok)';
+    }).catch(function (e) {
+      s.score = old; renderProg();
+      row.querySelector('.st').textContent = 'ไม่สำเร็จ'; row.querySelector('.st').style.color = 'var(--bad)';
+      toast('บันทึกไม่สำเร็จ<br>' + esc(e.message), 'bad', 3000);
+    });
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>
